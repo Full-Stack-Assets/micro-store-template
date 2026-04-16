@@ -4,6 +4,10 @@ const nextConfig = {
   images: {
     domains: ['oaidalleapiprodscus.blob.core.windows.net'],
   },
+  // Optimize for Vercel deployment
+  swcMinify: true,
+  compress: true,
+  poweredByHeader: false,
 }
 
 module.exports = nextConfig
