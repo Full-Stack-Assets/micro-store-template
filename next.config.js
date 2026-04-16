@@ -5,7 +5,6 @@ const nextConfig = {
     domains: ['oaidalleapiprodscus.blob.core.windows.net'],
   },
   // Optimize for Vercel deployment
-  swcMinify: true,
   compress: true,
   poweredByHeader: false,
 }

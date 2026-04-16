@@ -122,7 +122,7 @@ Access via: Project Dashboard → Analytics tab
 ### Build Fails
 - Check build logs in Vercel dashboard
 - Ensure all dependencies are in `package.json`
-- Verify Node.js version compatibility (currently using Next.js 14)
+- Verify Node.js version compatibility (currently using Next.js 15)
 
 ### Environment Variable Not Working
 - Ensure variable name is exactly `NEXT_PUBLIC_BRAND_DATA`

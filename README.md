@@ -4,7 +4,7 @@ This is an auto-generated Next.js store template for the **Evolution Engine**.
 
 ## Features
 
-- ⚡ Built with Next.js 14 and React 18
+- ⚡ Built with Next.js 15 and React 19
 - 🎨 Tailwind CSS for styling
 - 🚀 Optimized for Vercel deployment
 - 🔧 TypeScript support
@@ -65,7 +65,7 @@ Example:
 
 ## Tech Stack
 
-- **Framework**: Next.js 14
+- **Framework**: Next.js 15
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **Deployment**: Vercel
