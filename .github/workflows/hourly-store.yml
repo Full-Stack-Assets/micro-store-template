@@ -1,0 +1,103 @@
+name: Hourly store generation
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      brand_data:
+        description: "Override brand data JSON (skips engine fetch)"
+        required: false
+        type: string
+  repository_dispatch:
+    types: [engine-tick]
+
+concurrency:
+  group: hourly-store
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      EVOLUTION_ENGINE_URL: ${{ secrets.EVOLUTION_ENGINE_URL }}
+      EVOLUTION_ENGINE_TOKEN: ${{ secrets.EVOLUTION_ENGINE_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Resolve brand data
+        id: brand
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.brand_data || '' }}" ]; then
+            echo "source=workflow_dispatch input" >&2
+            printf '%s' '${{ github.event.inputs.brand_data }}' > brand.json
+          elif [ -n "${{ toJSON(github.event.client_payload.brand_data) }}" ] && [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "source=repository_dispatch payload" >&2
+            printf '%s' '${{ toJSON(github.event.client_payload.brand_data) }}' > brand.json
+          else
+            echo "source=evolution-engine" >&2
+            curl -fsSL \
+              -H "Authorization: Bearer ${EVOLUTION_ENGINE_TOKEN}" \
+              -H "Accept: application/json" \
+              "${EVOLUTION_ENGINE_URL%/}/brand" \
+              -o brand.json
+          fi
+          {
+            echo "NEXT_PUBLIC_BRAND_DATA<<BRAND_EOF"
+            cat brand.json
+            echo
+            echo "BRAND_EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate brand data against schema
+        run: |
+          npx --yes ajv-cli@5 validate \
+            -s schema/brand-data.schema.json \
+            -d brand.json
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_BRAND_DATA: ${{ env.NEXT_PUBLIC_BRAND_DATA }}
+        run: vercel build --token "$VERCEL_TOKEN"
+
+      - name: Deploy preview
+        id: deploy
+        run: |
+          set -euo pipefail
+          url="$(vercel deploy --prebuilt --token "$VERCEL_TOKEN")"
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview: $url"
+
+      - name: Report deployment to engine
+        if: success() && env.EVOLUTION_ENGINE_URL != ''
+        continue-on-error: true
+        run: |
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer ${EVOLUTION_ENGINE_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${EVOLUTION_ENGINE_URL%/}/deployments" \
+            -d "$(jq -n \
+                    --arg url "${{ steps.deploy.outputs.preview_url }}" \
+                    --arg sha "${{ github.sha }}" \
+                    --arg run_id "${{ github.run_id }}" \
+                    '{url:$url, sha:$sha, run_id:$run_id, ran_at:now|todate}')"
