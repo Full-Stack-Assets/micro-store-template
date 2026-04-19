@@ -20,7 +20,43 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          EVOLUTION_ENGINE_URL: ${{ secrets.EVOLUTION_ENGINE_URL }}
+          EVOLUTION_ENGINE_TOKEN: ${{ secrets.EVOLUTION_ENGINE_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
+                      EVOLUTION_ENGINE_URL EVOLUTION_ENGINE_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error title=Missing repo secrets::The hourly-store workflow is missing: ${missing[*]}"
+            {
+              echo "## Missing required secrets"
+              echo
+              echo "The hourly-store workflow cannot run until these are set."
+              echo "See [docs/SETUP.md](../blob/${GITHUB_SHA}/docs/SETUP.md) for how to provision them."
+              echo
+              for n in "${missing[@]}"; do
+                echo "- \`$n\`"
+              done
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All five required secrets are present."
+
   deploy:
+    needs: preflight
     runs-on: ubuntu-latest
     env:
       EVOLUTION_ENGINE_URL: ${{ secrets.EVOLUTION_ENGINE_URL }}
