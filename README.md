@@ -49,6 +49,8 @@ Each run: fetch → validate against `schema/brand-data.schema.json` → build �
 | `EVOLUTION_ENGINE_URL` | Base URL, e.g. `https://engine.example.com`. Workflow calls `GET {url}/brand` and `POST {url}/deployments`. |
 | `EVOLUTION_ENGINE_TOKEN` | Bearer token for both calls. |
 
+See [docs/SETUP.md](./docs/SETUP.md) for step-by-step provisioning.
+
 ## Local preview
 
 ```bash
