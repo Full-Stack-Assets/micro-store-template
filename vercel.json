@@ -7,4 +7,6 @@
   "env": {
     "NEXT_PUBLIC_BRAND_DATA": "@next_public_brand_data"
   }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs"
 }

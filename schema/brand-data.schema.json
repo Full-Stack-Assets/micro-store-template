@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/full-stack-assets/micro-store-template/schema/brand-data.schema.json",
+  "title": "BrandData",
+  "description": "Payload consumed by micro-store-template via NEXT_PUBLIC_BRAND_DATA. Produced by the evolution-engine.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["brandName", "tagline", "colorPalette"],
+  "properties": {
+    "brandName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tagline": {
+      "type": "string",
+      "minLength": 1
+    },
+    "logoUrl": {
+      "type": "string",
+      "pattern": "^https?://"
+    },
+    "heroImageUrl": {
+      "type": "string",
+      "pattern": "^https?://"
+    },
+    "colorPalette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "secondary"],
+      "properties": {
+        "primary": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}){1,2}$" },
+        "secondary": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}){1,2}$" }
+      }
+    }
+  }
+}

@@ -41,3 +41,8 @@ next-env.d.ts
 *.swp
 *.swo
 *~
+node_modules/
+.next/
+.vercel/
+*.log
+.env*.local

@@ -1,13 +1,14 @@
 import React from 'react';
+import type { BrandData } from '../types/brand';
 
 export default function Home() {
-  const [brand, setBrand] = React.useState<any>(null);
+  const [brand, setBrand] = React.useState<BrandData | null>(null);
 
   React.useEffect(() => {
     const data = process.env.NEXT_PUBLIC_BRAND_DATA;
     if (data) {
       try {
-        setBrand(JSON.parse(data));
+        setBrand(JSON.parse(data) as BrandData);
       } catch (e) {
         console.error('Failed to parse brand data', e);
       }
