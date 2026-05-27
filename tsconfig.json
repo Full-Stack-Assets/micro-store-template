@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "target": "ES2017",
     "lib": [
       "dom",
       "dom.iterable",
@@ -10,6 +11,8 @@
     "strict": false,
     "noEmit": true,
     "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "node",
