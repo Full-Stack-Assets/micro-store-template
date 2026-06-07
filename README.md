@@ -116,7 +116,10 @@ Each run: fetch → validate against `schema/brand-data.schema.json` → build �
 | `EVOLUTION_ENGINE_URL` | Base URL, e.g. `https://engine.example.com`. Workflow calls `GET {url}/brand` and `POST {url}/deployments`. |
 | `EVOLUTION_ENGINE_TOKEN` | Bearer token for both calls. |
 
-See [docs/SETUP.md](./docs/SETUP.md) for step-by-step provisioning.
+See [docs/SETUP.md](./docs/SETUP.md) for step-by-step provisioning of the
+secrets above, and [`integration/`](./integration/) for the formal
+contract (OpenAPI spec + dispatch script) that the evolution-engine
+must implement.
 
 ## Local preview
 
