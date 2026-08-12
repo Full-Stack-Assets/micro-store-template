@@ -1,82 +1,45 @@
-# Deployment Guide: Vercel
+# Deployment Guide
 
-This guide covers deploying the Micro Store Template to Vercel, the recommended platform for this Next.js application.
-
-## Why Vercel?
-
-Vercel is the optimal deployment platform for this template because:
-- **Native Next.js support**: Built by the creators of Next.js
-- **Zero configuration**: Works out-of-the-box with sensible defaults
-- **Automatic CI/CD**: Deploy on every git push
-- **Preview deployments**: Every pull request gets a unique preview URL
-- **Edge network**: Global CDN for optimal performance
-- **Easy environment variables**: Simple injection of `NEXT_PUBLIC_BRAND_DATA`
+The storefront is configured as a static Next.js export. The repository's
+hourly workflow builds `out/` and publishes that artifact with GitHub Pages.
+The same output directory can also be served by any standards-compliant
+static host.
 
 ## Prerequisites
 
-1. A [Vercel account](https://vercel.com/signup) (free tier available)
-2. This repository pushed to GitHub, GitLab, or Bitbucket
-3. Your brand data JSON prepared for the `NEXT_PUBLIC_BRAND_DATA` environment variable
+1. Repository access with permission to manage Actions and Pages.
+2. A valid `NEXT_PUBLIC_BRAND_DATA` JSON payload.
+3. Optional Evolution Engine credentials for automated brand retrieval and
+   deployment callbacks.
 
-## Deployment Steps
+## Enable GitHub Pages
 
-### Option 1: Deploy via Vercel Dashboard (Recommended)
+1. Open the repository **Settings**.
+2. Select **Pages**.
+3. Set **Source** to **GitHub Actions**.
+4. Open **Actions** and run **Hourly store generation** manually with a
+   `brand_data` payload for the first smoke test.
 
-1. **Connect Repository**
-   - Go to [vercel.com/new](https://vercel.com/new)
-   - Click "Import Project"
-   - Select your Git provider and authenticate
-   - Choose this repository
+The workflow uses the repository name as the production base path and
+publishes the generated `out/` directory.
 
-2. **Configure Project**
-   - **Framework Preset**: Next.js (auto-detected)
-   - **Root Directory**: `./` (leave as default)
-   - **Build Command**: `npm run build` (auto-detected)
-   - **Output Directory**: `.next` (auto-detected)
+## Build locally
 
-3. **Set Environment Variable**
-   - Click "Environment Variables"
-   - Add variable:
-     - **Name**: `NEXT_PUBLIC_BRAND_DATA`
-     - **Value**: Your brand data JSON (see example below)
-     - **Environment**: Production, Preview, Development (select all)
+```bash
+npm ci
+NEXT_PUBLIC_BRAND_DATA='{"brandName":"Test","tagline":"Hello","colorPalette":{"primary":"#ffffff","secondary":"#000000"}}' \
+  npm run build
+```
 
-4. **Deploy**
-   - Click "Deploy"
-   - Wait for build to complete (~1-2 minutes)
-   - Visit your deployment URL
+Serve the exported site locally:
 
-### Option 2: Deploy via Vercel CLI
+```bash
+npx --yes serve out
+```
 
-1. **Install Vercel CLI**
-   ```bash
-   npm install -g vercel
-   ```
+## Environment variable format
 
-2. **Login to Vercel**
-   ```bash
-   vercel login
-   ```
-
-3. **Deploy**
-   ```bash
-   vercel
-   ```
-
-4. **Add Environment Variable**
-   ```bash
-   vercel env add NEXT_PUBLIC_BRAND_DATA
-   ```
-   Then paste your brand data JSON when prompted.
-
-5. **Deploy to Production**
-   ```bash
-   vercel --prod
-   ```
-
-## Environment Variable Format
-
-The `NEXT_PUBLIC_BRAND_DATA` should be a JSON string with the following structure:
+`NEXT_PUBLIC_BRAND_DATA` must be a JSON string with this shape:
 
 ```json
 {
@@ -91,96 +54,48 @@ The `NEXT_PUBLIC_BRAND_DATA` should be a JSON string with the following structur
 }
 ```
 
-**Note**: When adding this to Vercel, paste the entire JSON as a single-line string or multi-line (Vercel accepts both).
+## Automated publishing
 
-## Custom Domain (Optional)
+The workflow accepts brand data in this order:
 
-1. Go to your project in Vercel Dashboard
-2. Navigate to "Settings" → "Domains"
-3. Add your custom domain
-4. Follow DNS configuration instructions
-5. Vercel automatically provisions SSL certificate
+1. `workflow_dispatch.inputs.brand_data`;
+2. `repository_dispatch.client_payload.brand_data`; or
+3. `GET {EVOLUTION_ENGINE_URL}/brand`.
 
-## Automatic Deployments
+The first two paths let maintainers test publishing without engine
+credentials. The engine-backed path requires both repository secrets
+documented in `docs/SETUP.md`.
 
-Once connected:
-- **Production**: Every push to `main` branch triggers a production deployment
-- **Preview**: Every push to any branch or PR creates a preview deployment
-- **Rollback**: Easy rollback to any previous deployment via dashboard
+After a successful Pages deployment, the workflow sends this payload to
+`POST {EVOLUTION_ENGINE_URL}/deployments` when the engine URL is configured:
 
-## Monitoring & Analytics
-
-Vercel provides built-in:
-- **Real-time logs**: View build and runtime logs
-- **Analytics**: Page views and web vitals (requires Vercel Analytics)
-- **Performance insights**: Core Web Vitals tracking
-
-Access via: Project Dashboard → Analytics tab
+```json
+{
+  "url": "https://full-stack-assets.github.io/micro-store-template/",
+  "sha": "<commit sha>",
+  "run_id": "<workflow run id>",
+  "ran_at": "<ISO-8601 timestamp>"
+}
+```
 
 ## Troubleshooting
 
-### Build Fails
-- Check build logs in Vercel dashboard
-- Ensure all dependencies are in `package.json`
-- Verify Node.js version compatibility (currently using Next.js 15)
+### Brand resolution fails
 
-### Environment Variable Not Working
-- Ensure variable name is exactly `NEXT_PUBLIC_BRAND_DATA`
-- Verify it's added to the correct environment (Production/Preview)
-- Redeploy after adding environment variables
+Provide `brand_data` in a manual run or configure both engine secrets. The
+workflow emits a precise error when no brand source is available.
 
-### Images Not Loading
-- Ensure image URLs are HTTPS
-- Check `next.config.js` has correct domains in `images.domains` array
-- Current allowed domain: `oaidalleapiprodscus.blob.core.windows.net`
+### Schema validation fails
 
-## Cost Considerations
+Download the `brand.json` artifact from the failed run and compare it with
+`schema/brand-data.schema.json`.
 
-**Free Tier Includes:**
-- Unlimited deployments
-- 100GB bandwidth per month
-- Automatic SSL
-- Preview deployments
-- Custom domains
+### Static assets return 404
 
-**Paid Plans** offer:
-- Higher bandwidth limits
-- Team collaboration features
-- Advanced analytics
-- Password protection
+Confirm Pages is using **GitHub Actions** and that `next.config.js` derives
+the base path from `GITHUB_REPOSITORY` during CI builds.
 
-For most micro-stores, the free tier is sufficient.
+### Scheduled runs stop
 
-## Evolution Engine Integration
-
-For automated deployment from the Evolution Engine:
-
-1. **Use Vercel API** to create deployments programmatically
-2. **Deploy Token**: Generate at vercel.com/account/tokens
-3. **API Endpoint**: `POST https://api.vercel.com/v13/deployments`
-4. **Inject Brand Data**: Set via environment variable in the API call
-
-Example API call:
-```bash
-curl -X POST "https://api.vercel.com/v13/deployments" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "micro-store-template",
-    "gitSource": {
-      "type": "github",
-      "repo": "Full-Stack-Assets/micro-store-template",
-      "ref": "main"
-    },
-    "env": {
-      "NEXT_PUBLIC_BRAND_DATA": "{ your brand JSON }"
-    }
-  }'
-```
-
-## Additional Resources
-
-- [Vercel Documentation](https://vercel.com/docs)
-- [Next.js on Vercel](https://vercel.com/docs/frameworks/nextjs)
-- [Environment Variables Guide](https://vercel.com/docs/environment-variables)
-- [Custom Domains](https://vercel.com/docs/custom-domains)
+GitHub may disable schedules after prolonged repository inactivity. Re-enable
+the workflow from the Actions tab or push a repository change.
