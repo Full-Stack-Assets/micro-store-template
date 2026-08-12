@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Validate schema example
+        run: |
+          cat > brand.json <<'JSON'
+          {
+            "brandName": "CI Store",
+            "tagline": "Automated verification",
+            "colorPalette": {
+              "primary": "#0f172a",
+              "secondary": "#f97316"
+            }
+          }
+          JSON
+          npx --no-install ajv validate -s schema/brand-data.schema.json -d brand.json
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_BRAND_DATA: '{"brandName":"CI Store","tagline":"Automated verification","colorPalette":{"primary":"#0f172a","secondary":"#f97316"}}'
+        run: npm run build
