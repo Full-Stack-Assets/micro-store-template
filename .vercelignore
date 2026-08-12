@@ -1,8 +1,0 @@
-# Vercel ignore file - excludes files from deployment
-.git
-.github
-node_modules
-.next
-*.log
-.DS_Store
-README.md

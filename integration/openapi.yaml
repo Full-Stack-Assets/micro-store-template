@@ -1,21 +1,19 @@
 openapi: 3.1.0
 info:
   title: Evolution Engine ↔ micro-store-template contract
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    HTTP surface that the evolution-engine (a.k.a. store generator) must
-    implement so the hourly-store workflow in
-    `Full-Stack-Assets/micro-store-template` can pull brand data and
-    report back deployed previews.
+    HTTP surface implemented by the Evolution Engine so the hourly storefront
+    workflow can retrieve brand data and report a completed publication.
 
-    The source of truth for the `BrandData` payload is
-    [`schema/brand-data.schema.json`](../schema/brand-data.schema.json).
+    The source of truth for `BrandData` is
+    `schema/brand-data.schema.json`.
 servers:
   - url: "{baseUrl}"
     variables:
       baseUrl:
         default: https://engine.example.com
-        description: Value of the `EVOLUTION_ENGINE_URL` secret in the storefront repo.
+        description: Value of the `EVOLUTION_ENGINE_URL` repository secret.
 
 components:
   securitySchemes:
@@ -23,7 +21,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: opaque
-      description: Token issued by the engine; stored as `EVOLUTION_ENGINE_TOKEN`.
+      description: Token stored as `EVOLUTION_ENGINE_TOKEN`.
 
   schemas:
     ColorPalette:
@@ -72,15 +70,15 @@ components:
         url:
           type: string
           pattern: '^https://'
-          description: Vercel preview URL returned by `vercel deploy`.
-          example: https://micro-store-template-abc123.vercel.app
+          description: Public URL emitted by the repository publishing workflow.
+          example: https://full-stack-assets.github.io/micro-store-template/
         sha:
           type: string
-          description: Commit SHA the workflow ran against.
+          description: Commit SHA used for the build.
           example: a2053199ac9edcbf10493976e7e5752534143c7e
         run_id:
           type: string
-          description: GitHub Actions run ID for cross-reference.
+          description: GitHub Actions run ID.
           example: "12345678901"
         ran_at:
           type: string
@@ -94,15 +92,10 @@ paths:
   /brand:
     get:
       operationId: getBrand
-      summary: Generate a new brand for the next hourly store.
+      summary: Generate brand data for the next storefront build.
       description: |
-        Called once per workflow run (hourly cron, manual dispatch, or
-        immediately after a `repository_dispatch` that did *not* include
-        a `client_payload.brand_data` override).
-
-        Implementations are expected to be **non-idempotent** — each call
-        returns a fresh, generated brand. Engines that want to replay
-        should expose a separate endpoint.
+        Called when a workflow run does not receive brand data from a manual
+        input or repository dispatch payload.
       responses:
         '200':
           description: A `BrandData` payload conforming to the JSON schema.
@@ -113,16 +106,15 @@ paths:
         '401':
           description: Missing or invalid bearer token.
         '5XX':
-          description: Engine-side failure. The workflow fails the run and skips deploy.
+          description: Engine-side failure.
 
   /deployments:
     post:
       operationId: recordDeployment
-      summary: Record a successful preview deployment.
+      summary: Record a successful storefront publication.
       description: |
-        Best-effort callback after `vercel deploy --prebuilt` succeeds.
-        The workflow uses `continue-on-error: true`, so 5XX responses
-        won't fail the run — but the engine loses observability.
+        Best-effort callback after the repository publishing workflow returns
+        a public URL. Callback failure does not invalidate the published site.
       requestBody:
         required: true
         content:
@@ -131,7 +123,7 @@ paths:
               $ref: '#/components/schemas/DeploymentReport'
       responses:
         '202':
-          description: Accepted (preferred).
+          description: Accepted.
         '200':
           description: Recorded.
         '401':

@@ -1,120 +1,90 @@
 # Setup
 
-This walkthrough gets the hourly-store workflow from "inert" to "publishing
-a new Vercel preview every hour." It assumes you already have commit access
-to `Full-Stack-Assets/micro-store-template`.
+This walkthrough activates the hourly storefront workflow and its optional
+Evolution Engine integration.
 
 ## Prerequisites
 
-- **GitHub CLI** (`gh`), authenticated:
-  ```bash
-  gh auth login
-  gh auth status
-  ```
-- **Vercel account** with this repo imported as a project. If you haven't
-  done that yet, run `npx vercel link` from the repo root and follow the
-  prompts, or import it at <https://vercel.com/new>.
-- **A running `evolution-engine`** reachable over HTTPS, exposing:
-  - `GET  {base}/brand` — returns a `BrandData` JSON payload (see [`schema/brand-data.schema.json`](../schema/brand-data.schema.json)).
-  - `POST {base}/deployments` — accepts `{url, sha, run_id, ran_at}`.
-
-The workflow (`.github/workflows/hourly-store.yml`) calls both endpoints
-with `Authorization: Bearer <EVOLUTION_ENGINE_TOKEN>`.
-
-## The five secrets
-
-Every `gh secret set` command below reads the value from stdin so it
-never lands in your shell history.
-
-### 1. `VERCEL_TOKEN`
-
-Auth for the Vercel CLI (`vercel pull`, `vercel build`, `vercel deploy`).
-
-1. Open <https://vercel.com/account/tokens>.
-2. Click **Create Token**. Name it `micro-store-template hourly`. Scope
-   it to the owning team/account. Expiration: whatever your policy
-   allows (shorter is better; you'll rotate it).
-3. Copy the token once — Vercel only shows it on creation.
+- Commit access to `Full-Stack-Assets/micro-store-template`.
+- GitHub CLI authenticated with access to the repository.
+- GitHub Pages configured with **Source: GitHub Actions**.
+- Optional: a reachable Evolution Engine exposing:
+  - `GET {base}/brand`
+  - `POST {base}/deployments`
 
 ```bash
-gh secret set VERCEL_TOKEN --repo Full-Stack-Assets/micro-store-template
-# paste the token, then Ctrl-D
+gh auth login
+gh auth status
 ```
 
-### 2. `VERCEL_ORG_ID` and 3. `VERCEL_PROJECT_ID`
+## Repository secrets
 
-Both live in `.vercel/project.json` after you link the project locally:
+Only engine-backed brand generation requires secrets. Manual dispatch and
+`repository_dispatch` payloads can publish without them.
+
+### `EVOLUTION_ENGINE_URL`
+
+Set the base URL without a trailing slash:
 
 ```bash
-npx vercel link --yes
-cat .vercel/project.json
-# { "orgId": "team_xxx...", "projectId": "prj_xxx..." }
+gh secret set EVOLUTION_ENGINE_URL \
+  --repo Full-Stack-Assets/micro-store-template
 ```
 
-`.vercel/` is gitignored, so this file stays local.
+### `EVOLUTION_ENGINE_TOKEN`
+
+Set the bearer token accepted by both engine endpoints:
 
 ```bash
-jq -r .orgId .vercel/project.json \
-  | gh secret set VERCEL_ORG_ID --repo Full-Stack-Assets/micro-store-template
-
-jq -r .projectId .vercel/project.json \
-  | gh secret set VERCEL_PROJECT_ID --repo Full-Stack-Assets/micro-store-template
+gh secret set EVOLUTION_ENGINE_TOKEN \
+  --repo Full-Stack-Assets/micro-store-template
 ```
 
-### 4. `EVOLUTION_ENGINE_URL`
-
-Base URL of your running engine, **no trailing slash**. The workflow
-appends `/brand` and `/deployments`.
-
-```bash
-gh secret set EVOLUTION_ENGINE_URL --repo Full-Stack-Assets/micro-store-template
-# e.g. https://engine.example.com
-```
-
-### 5. `EVOLUTION_ENGINE_TOKEN`
-
-Bearer token the engine accepts on both endpoints. Generate it from
-whatever the engine provides (its admin UI, an auth CLI, a seeded
-env var — lives in the engine's repo, not this one). The workflow
-sends it as `Authorization: Bearer <token>` on every call.
-
-```bash
-gh secret set EVOLUTION_ENGINE_TOKEN --repo Full-Stack-Assets/micro-store-template
-```
-
-## Verify
+Check the configured names:
 
 ```bash
 gh secret list --repo Full-Stack-Assets/micro-store-template
 ```
 
-All five names should appear. Then trigger a smoke test that bypasses
-the engine fetch by passing brand data inline:
+## Smoke test
+
+Run the workflow with inline brand data:
 
 ```bash
 gh workflow run hourly-store.yml \
   --repo Full-Stack-Assets/micro-store-template \
-  -f brand_data='{"brandName":"Smoke Test","tagline":"hello","colorPalette":{"primary":"#0f172a","secondary":"#f97316"}}'
+  -f brand_data='{"brandName":"Smoke Test","tagline":"Hello","colorPalette":{"primary":"#0f172a","secondary":"#f97316"}}'
 
 gh run watch --repo Full-Stack-Assets/micro-store-template
 ```
 
-A successful run logs `Preview: https://<project>-<hash>.vercel.app` in
-the **Deploy preview** step. Open it — the storefront should render the
-smoke-test brand.
+The successful run summary contains the Pages URL. Open it and confirm that
+the smoke-test brand renders.
+
+## Engine-driven test
+
+After setting both secrets:
+
+```bash
+gh workflow run hourly-store.yml \
+  --repo Full-Stack-Assets/micro-store-template
+
+gh run watch --repo Full-Stack-Assets/micro-store-template
+```
+
+The engine must return JSON conforming to
+`schema/brand-data.schema.json`.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
-| `preflight` job fails with "Missing repo secrets" | One of the five names above isn't set, or was set to an empty value. Check `gh secret list` and re-set. |
-| `Error: No existing credentials found` in the Vercel step | `VERCEL_TOKEN` is wrong or has been revoked. Create a new token and re-set the secret. |
-| `404` on brand fetch | `EVOLUTION_ENGINE_URL` has a trailing slash, wrong host, or the `/brand` endpoint isn't implemented on the engine. |
-| `401` on brand fetch or deployment report | `EVOLUTION_ENGINE_TOKEN` doesn't match what the engine expects. |
-| `invalid_source_schema` from ajv step | Engine returned JSON that doesn't match [`schema/brand-data.schema.json`](../schema/brand-data.schema.json). Inspect the `brand.json` artifact in the failed run. |
-| Cron stops firing | GitHub auto-disables scheduled workflows after 60 days with no repo activity. Push any commit or re-enable from the Actions tab. |
+| No brand source is available | Supply `brand_data` or configure both engine secrets. |
+| `404` on brand fetch | The base URL is wrong or `/brand` is unavailable. |
+| `401` on engine calls | The bearer token does not match the engine configuration. |
+| Schema validation fails | Inspect `brand.json` and compare it with the repository schema. |
+| Pages deployment is skipped | Set Pages source to **GitHub Actions** in repository settings. |
+| Cron stops firing | Re-enable the scheduled workflow after prolonged inactivity. |
 
-## Rotating secrets
-
-Same command — `gh secret set <NAME>` overwrites. No workflow change
-needed; the next run picks up the new value.
+Secret rotation uses the same `gh secret set` commands; the next run reads
+the replacement values.

@@ -13,57 +13,23 @@ on:
     types: [engine-tick]
 
 concurrency:
-  group: hourly-store
+  group: pages
   cancel-in-progress: false
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
-  preflight:
+  publish:
     runs-on: ubuntu-latest
-    steps:
-      - name: Check required secrets
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          EVOLUTION_ENGINE_URL: ${{ secrets.EVOLUTION_ENGINE_URL }}
-          EVOLUTION_ENGINE_TOKEN: ${{ secrets.EVOLUTION_ENGINE_TOKEN }}
-        run: |
-          set -euo pipefail
-          missing=()
-          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
-                      EVOLUTION_ENGINE_URL EVOLUTION_ENGINE_TOKEN; do
-            if [ -z "${!name:-}" ]; then
-              missing+=("$name")
-            fi
-          done
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error title=Missing repo secrets::The hourly-store workflow is missing: ${missing[*]}"
-            {
-              echo "## Missing required secrets"
-              echo
-              echo "The hourly-store workflow cannot run until these are set."
-              echo "See [docs/SETUP.md](../blob/${GITHUB_SHA}/docs/SETUP.md) for how to provision them."
-              echo
-              for n in "${missing[@]}"; do
-                echo "- \`$n\`"
-              done
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "All five required secrets are present."
-
-  deploy:
-    needs: preflight
-    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     env:
       EVOLUTION_ENGINE_URL: ${{ secrets.EVOLUTION_ENGINE_URL }}
       EVOLUTION_ENGINE_TOKEN: ${{ secrets.EVOLUTION_ENGINE_TOKEN }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,23 +41,29 @@ jobs:
       - run: npm ci
 
       - name: Resolve brand data
-        id: brand
         run: |
           set -euo pipefail
-          if [ -n "${{ github.event.inputs.brand_data || '' }}" ]; then
-            echo "source=workflow_dispatch input" >&2
-            printf '%s' '${{ github.event.inputs.brand_data }}' > brand.json
-          elif [ -n "${{ toJSON(github.event.client_payload.brand_data) }}" ] && [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "source=repository_dispatch payload" >&2
-            printf '%s' '${{ toJSON(github.event.client_payload.brand_data) }}' > brand.json
-          else
-            echo "source=evolution-engine" >&2
+          manual_input='${{ github.event.inputs.brand_data || '' }}'
+          dispatch_payload='${{ toJSON(github.event.client_payload.brand_data) }}'
+
+          if [ -n "$manual_input" ]; then
+            printf '%s' "$manual_input" > brand.json
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ] &&
+               [ "$dispatch_payload" != "null" ] &&
+               [ -n "$dispatch_payload" ]; then
+            printf '%s' "$dispatch_payload" > brand.json
+          elif [ -n "${EVOLUTION_ENGINE_URL:-}" ] &&
+               [ -n "${EVOLUTION_ENGINE_TOKEN:-}" ]; then
             curl -fsSL \
               -H "Authorization: Bearer ${EVOLUTION_ENGINE_TOKEN}" \
               -H "Accept: application/json" \
               "${EVOLUTION_ENGINE_URL%/}/brand" \
               -o brand.json
+          else
+            echo "::error title=No brand source::Supply brand_data or configure both Evolution Engine secrets."
+            exit 1
           fi
+
           {
             echo "NEXT_PUBLIC_BRAND_DATA<<BRAND_EOF"
             cat brand.json
@@ -99,33 +71,26 @@ jobs:
             echo "BRAND_EOF"
           } >> "$GITHUB_ENV"
 
-      - name: Validate brand data against schema
-        run: |
-          npx --yes ajv-cli@5 validate \
-            -s schema/brand-data.schema.json \
-            -d brand.json
+      - name: Validate brand data
+        run: npx --no-install ajv validate -s schema/brand-data.schema.json -d brand.json
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-
-      - name: Pull Vercel project settings
-        run: vercel pull --yes --environment=preview --token "$VERCEL_TOKEN"
-
-      - name: Build
+      - name: Build static export
         env:
           NEXT_PUBLIC_BRAND_DATA: ${{ env.NEXT_PUBLIC_BRAND_DATA }}
-        run: vercel build --token "$VERCEL_TOKEN"
+        run: npm run build
 
-      - name: Deploy preview
-        id: deploy
-        run: |
-          set -euo pipefail
-          url="$(vercel deploy --prebuilt --token "$VERCEL_TOKEN")"
-          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
-          echo "Preview: $url"
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+      - name: Publish Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: Report deployment to engine
-        if: success() && env.EVOLUTION_ENGINE_URL != ''
+        if: success() && env.EVOLUTION_ENGINE_URL != '' && env.EVOLUTION_ENGINE_TOKEN != ''
         continue-on-error: true
         run: |
           curl -fsSL -X POST \
@@ -133,7 +98,7 @@ jobs:
             -H "Content-Type: application/json" \
             "${EVOLUTION_ENGINE_URL%/}/deployments" \
             -d "$(jq -n \
-                    --arg url "${{ steps.deploy.outputs.preview_url }}" \
+                    --arg url "${{ steps.deployment.outputs.page_url }}" \
                     --arg sha "${{ github.sha }}" \
                     --arg run_id "${{ github.run_id }}" \
                     '{url:$url, sha:$sha, run_id:$run_id, ran_at:now|todate}')"
