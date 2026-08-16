@@ -71,7 +71,7 @@ After a successful Pages deployment, the workflow sends this payload to
 
 ```json
 {
-  "url": "https://full-stack-assets.github.io/micro-store-template/",
+  "url": "https://fullstackassets.com/micro-store-template/",
   "sha": "<commit sha>",
   "run_id": "<workflow run id>",
   "ran_at": "<ISO-8601 timestamp>"
