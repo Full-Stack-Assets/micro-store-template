@@ -71,7 +71,7 @@ components:
           type: string
           pattern: '^https://'
           description: Public URL emitted by the repository publishing workflow.
-          example: https://full-stack-assets.github.io/micro-store-template/
+          example: https://fullstackassets.com/micro-store-template/
         sha:
           type: string
           description: Commit SHA used for the build.
